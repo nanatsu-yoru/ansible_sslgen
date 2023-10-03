@@ -1,0 +1,68 @@
+---
+- name: Generate Nginx SSL
+  hosts: all
+  become: true
+  roles:
+    - nginx
+
+  tasks:
+    - name: Generate SSL certificate and key
+      shell: openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/server.key -out /etc/ssl/certs/server.crt -subj "/CN={{ inventory_hostname }}"
+      when: inventory_hostname in groups['public']
+    - name: Generate a DHPARAM key
+      copy:
+        src: j2/dhparam.pem.j2
+        dest: /etc/nginx/dhparam.pem
+        owner: root
+        group: root
+        mode: 0644
+      when: inventory_hostname in groups['public']
+    - name: Copy Nginx configuration file
+      copy:
+        src: j2/nginx_ssl.conf.j2
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: 0644
+      when: inventory_hostname in groups['public']
+
+- name: Update Nginx configuration file
+  hosts: public
+  become: true
+  
+  tasks:
+    - name: Create directory for Nginx configuration
+      ansible.builtin.file:
+        path: /etc/nginx/conf.d
+        state: directory
+
+    - name: Insert server block into Nginx configuration
+      blockinfile:
+        path: /etc/nginx/conf.d/reverse_proxy.conf
+        block: |
+          server {
+              listen 80;
+              listen 443 ssl;
+              server_name {{ inventory_hostname }};
+
+              ssl_certificate /etc/ssl/certs/server.crt;
+              ssl_certificate_key /etc/ssl/private/server.key;
+              ssl_session_timeout 1d;
+              ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
+              ssl_session_tickets off;
+
+              location /server2/ {
+                  proxy_pass http://{{ hostvars['reverseproxy']['ansible_host'] }}/;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              }
+          }
+        create: yes
+      notify: Restart Nginx
+
+  handlers:
+  - name: Restart Nginx
+    service:
+      name: nginx
+      state: restarted
