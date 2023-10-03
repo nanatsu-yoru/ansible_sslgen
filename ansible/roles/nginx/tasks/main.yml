@@ -1,0 +1,10 @@
+---
+# tasks file for apache
+- include_tasks: CentOS.yml
+  when: ansible_os_family == 'RedHat'
+
+- include_tasks: Debian.yml
+  when: ansible_os_family == 'Debian'
+
+- include_tasks: FreeBSD.yml
+  when: ansible_os_family == 'FreeBSD'

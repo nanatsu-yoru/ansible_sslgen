@@ -1,0 +1,4 @@
+- name: Install Apache
+  pkgng:
+    name: apache24
+    state: present

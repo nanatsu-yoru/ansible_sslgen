@@ -1,0 +1,18 @@
+---
+# tasks file for reverseproxy
+- name: Update Nginx configuration file
+  hosts: public
+  blockinfile:
+    path: /etc/nginx/conf.d/reverse_proxy.conf
+    block: |
+      server {
+          listen 80;
+          server_name {{ ansible_ssh_host }};
+
+          location /server2/ {
+              proxy_pass http://{{ target_server }}/;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          }
+      }
